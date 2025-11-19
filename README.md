@@ -103,5 +103,11 @@ cd chatbot-ui
 npm install
 npm start
 ```
+---
+
+## 📸 Screenshots
+![1](screenshots/1.png)
+
+---
 
 ⭐ If this project helped or inspired you, please consider giving the repository a star!

@@ -1,0 +1,12 @@
+[
+  {"id": "CUST001","name":"Asha Kapoor","age":29,"city":"Mumbai","phone":"9000000001","current_loans":0,"credit_score":745,"pre_approved_limit":200000},
+  {"id": "CUST002","name":"Rohan Mehta","age":34,"city":"Delhi","phone":"9000000002","current_loans":500000,"credit_score":690,"pre_approved_limit":150000},
+  {"id": "CUST003","name":"Priya Nair","age":41,"city":"Bengaluru","phone":"9000000003","current_loans":0,"credit_score":820,"pre_approved_limit":500000},
+  {"id": "CUST004","name":"Siddharth Rao","age":27,"city":"Hyderabad","phone":"9000000004","current_loans":200000,"credit_score":710,"pre_approved_limit":100000},
+  {"id": "CUST005","name":"Neha Singh","age":30,"city":"Kolkata","phone":"9000000005","current_loans":0,"credit_score":760,"pre_approved_limit":250000},
+  {"id": "CUST006","name":"Vikram Patel","age":45,"city":"Ahmedabad","phone":"9000000006","current_loans":300000,"credit_score":680,"pre_approved_limit":120000},
+  {"id": "CUST007","name":"Anjali Desai","age":38,"city":"Pune","phone":"9000000007","current_loans":0,"credit_score":795,"pre_approved_limit":300000},
+  {"id": "CUST008","name":"Kabir Khan","age":31,"city":"Lucknow","phone":"9000000008","current_loans":100000,"credit_score":730,"pre_approved_limit":180000},
+  {"id": "CUST009","name":"Maya Verma","age":26,"city":"Chennai","phone":"9000000009","current_loans":0,"credit_score":655,"pre_approved_limit":100000},
+  {"id": "CUST010","name":"Arjun Iyer","age":36,"city":"Gurgaon","phone":"9000000010","current_loans":400000,"credit_score":840,"pre_approved_limit":600000}
+]

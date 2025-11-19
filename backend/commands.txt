@@ -1,0 +1,10 @@
+cd E:\techathon\project\backend
+python -m venv aichatbot
+aichatbot\Scripts\activate
+
+# activate venv (PowerShell)
+.\.venv\Scripts\Activate.ps1
+pip install fastapi uvicorn python-multipart fpdf
+
+pip install -r req.txt
+uvicorn app:app --reload --port 8000
