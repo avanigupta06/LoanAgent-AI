@@ -33,6 +33,7 @@ Built using a **Master Agent + Worker Agents architecture**, LoanAgent AI handle
 ---
 
 ## 📁 **Repository Structure**
+```bash
 backend/
 │── app.py
 │── master_agent.py
@@ -54,6 +55,7 @@ backend/
 │── sanctions/ # generated PDFs
 
 chatbot-ui (React)/
+```
 
 ---
 
