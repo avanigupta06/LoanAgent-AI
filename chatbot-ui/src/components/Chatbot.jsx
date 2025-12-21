@@ -9,6 +9,10 @@ import React, { useState, useRef, useEffect } from "react";
   - Sends messages/files to backend
   - Renders agent replies and documents
 */
+const API_BASE =
+  process.env.REACT_APP_API_BASE || "http://localhost:8000";
+
+
 
 export default function Chatbot() {
   // -------------------- Session & Identity --------------------
@@ -90,10 +94,12 @@ export default function Chatbot() {
         const form = new FormData();
         form.append("file", file);
 
-        const res = await fetch("/api/upload", {
+        // upload
+        const res = await fetch(`${API_BASE}/api/upload`, {
           method: "POST",
           body: form
         });
+
 
         if (!res.ok) throw new Error("Upload failed");
         const data = await res.json();
@@ -111,7 +117,8 @@ export default function Chatbot() {
     // Send chat message to backend
     setIsTyping(true);
     try {
-      const res = await fetch("/api/chat", {
+      // chat
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -121,6 +128,7 @@ export default function Chatbot() {
           fileId
         })
       });
+
 
       if (!res.ok) {
         pushMessage("system", `Server error: ${await res.text()}`);
@@ -266,14 +274,16 @@ function ChatMessage({ msg }) {
       <div className={`${isUser ? "bg-indigo-600 text-white" : "bg-slate-100"} p-3 rounded max-w-[70%]`}>
         <div className="text-sm whitespace-pre-wrap">{msg.text}</div>
         {msg.meta?.link && (
+          // pdf link
           <a
-            href={`http://localhost:8000${msg.meta.link}`}
+            href={`${API_BASE}${msg.meta.link}`}
             target="_blank"
             rel="noreferrer"
             className="text-xs underline mt-2 inline-block"
           >
             Open document
           </a>
+
         )}
         <div className="text-[10px] text-slate-400 mt-1">
           {formatTime(msg.time)}
