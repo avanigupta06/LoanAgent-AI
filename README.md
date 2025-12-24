@@ -85,8 +85,6 @@ chatbot-ui (React)/
 
 ---
 
----
-
 ## 🛠️ **Tech Stack**
 
 ### **Backend**
@@ -103,11 +101,10 @@ chatbot-ui (React)/
 
 ---
 
-## 🧪 **Demo Capabilities**
+## 🧪 **Capabilities**
 Supports:
 - Customer identification  
-- Dynamic sales pitch  
-- Loan negotiation  
+- Dynamic sales pitch   
 - Salary slip upload  
 - Automatic underwriting  
 - PDF sanction letter generation  
@@ -120,7 +117,7 @@ Supports:
 ### **Backend**
 ```bash
 cd backend
-pip install -r req.txt
+pip install -r requirements.txt
 uvicorn app:app --reload --port 8000
 ```
 ### **Frontend**
