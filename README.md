@@ -40,6 +40,24 @@ Built using a **Master Agent + Worker Agents architecture**, LoanAgent AI handle
 
 ---
 
+### Sample Dummy Customer (Mock CRM Data)
+The system uses synthetic customer profiles to simulate real-world KYC, credit evaluation, and loan decisioning without using real customer data.
+```bash
+{
+  "id": "CUST001",
+  "name": "Asha Kapoor",
+  "age": 29,
+  "city": "Mumbai",
+  "phone": "9000000001",
+  "current_loans": 0,
+  "credit_score": 745,
+  "pre_approved_limit": 200000
+}
+
+```
+
+---
+
 ## 📁 **Repository Structure**
 ```bash
 backend/
@@ -118,5 +136,6 @@ npm start
 ![2](screenshots/2.png)
 
 ---
+
 
 ⭐ If this project helped or inspired you, please consider giving the repository a star!
