@@ -1,17 +1,3 @@
-# backend/master_agent.py
-
-"""
-Master Agent for Loan Processing System
-
-This service acts as an orchestrator between multiple worker agents:
-- Sales Agent (offers & greeting)
-- Verification Agent (KYC)
-- Underwriting Agent (loan decision)
-- Sanction Agent (PDF generation)
-
-It maintains session-level state to enable a true agentic, multi-step workflow.
-"""
-
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -19,19 +5,12 @@ from pathlib import Path
 import uuid, json, re
 from decimal import Decimal, getcontext
 
-# Worker agents
-from workers import sales, verification, underwriting, sanction as sanction_worker
-
-# External mock services
-# CRM → customer/KYC data
-# Credit Bureau → credit score
-from mock_services import crm as crm_service
+from workers import sales, underwriting, sanction as sanction_worker
 from mock_services import credit as credit_service
 
-# High precision for financial calculations
 getcontext().prec = 28
 
-# -------------------- Directory Setup --------------------
+# -------------------- Paths --------------------
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 UPLOAD_DIR = ROOT / "uploads"
@@ -40,22 +19,14 @@ SANCTION_DIR = ROOT / "sanctions"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 SANCTION_DIR.mkdir(parents=True, exist_ok=True)
 
-# -------------------- Load Customer Master Data --------------------
-CUSTOMERS_FILE = DATA_DIR / "customers.json"
-with open(CUSTOMERS_FILE, "r", encoding="utf-8") as f:
+with open(DATA_DIR / "customers.json", "r", encoding="utf-8") as f:
     CUSTOMERS = {c["id"]: c for c in json.load(f)}
 
 router = APIRouter()
-
-# -------------------- In-memory Storage --------------------
-# fileId → uploaded file path (demo-only, non-persistent)
 UPLOAD_MAP = {}
-
-# sessionId → conversational state
-# Enables multi-turn, agentic behavior
 SESSIONS = {}
 
-# -------------------- Request Schema --------------------
+
 class ChatRequest(BaseModel):
     sessionId: str
     customerId: str
@@ -63,154 +34,184 @@ class ChatRequest(BaseModel):
     fileId: str | None = None
 
 
-# =========================================================
-# 📤 File Upload API
-# =========================================================
 @router.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    """
-    Stores uploaded documents (e.g., salary slips)
-    and returns a short-lived fileId.
-    """
     uid = uuid.uuid4().hex
-    filename = f"{uid}_{file.filename}"
-    path = UPLOAD_DIR / filename
-
-    content = await file.read()
+    path = UPLOAD_DIR / f"{uid}_{file.filename}"
     with open(path, "wb") as f:
-        f.write(content)
-
+        f.write(await file.read())
     UPLOAD_MAP[uid] = str(path)
-
-    return {
-        "fileId": uid,
-        "filename": file.filename
-    }
+    return {"fileId": uid, "filename": file.filename}
 
 
-# =========================================================
-# 📄 Sanction Letter Download
-# =========================================================
 @router.get("/sanction/{filename}")
 def get_sanction(filename: str):
-    """
-    Serves generated sanction letter PDFs.
-    """
-    p = SANCTION_DIR / filename
-    if not p.exists():
+    path = SANCTION_DIR / filename
+    if not path.exists():
         raise HTTPException(status_code=404, detail="Sanction letter not found")
-
-    return FileResponse(p, media_type="application/pdf", filename=filename)
+    return FileResponse(path, media_type="application/pdf", filename=filename)
 
 
 # =========================================================
-# 🧠 MASTER AGENT — MAIN ENTRY POINT
+# 🧠 MASTER AGENT
 # =========================================================
 @router.post("/chat")
 def master_chat(req: ChatRequest):
     cid = req.customerId
 
-    # -------- Validate Customer --------
     if cid not in CUSTOMERS:
-        return {
-            "replies": [
-                {
-                    "role": "system",
-                    "text": f"Customer ID '{cid}' not found. Please check and try again."
-                }
-            ]
-        }
+        return {"replies": [{"role": "system", "text": "Invalid Customer ID."}]}
 
     customer = CUSTOMERS[cid]
     text = (req.message or "").strip()
 
-    # -------- Initialize / Restore Session --------
     session = SESSIONS.setdefault(req.sessionId, {
         "customerId": cid,
         "stage": "INIT"
     })
 
-    # =====================================================
-    # 1️⃣ Initial Greeting → Sales Agent
-    # =====================================================
-    if not text:
-        session["stage"] = "SALES"
-
-        offers = sales.get_offers_for_customer(customer)
-
-        replies = [
-            {
-                "role": "master",
-                "text": (
-                    f"Hi {customer['name']} 👋 "
-                    f"You’re pre-approved for a personal loan up to "
-                    f"₹{customer['pre_approved_limit']:,}."
-                )
-            }
-        ]
-
-        replies += [{"role": "sales", "text": o} for o in offers]
-
-        replies.append({
-            "role": "master",
-            "text": (
-                "Tell me the loan amount and tenure you prefer "
-                "(e.g., ₹150000 for 24 months)."
-            )
-        })
-
-        return {"replies": replies}
-
-    # =====================================================
-    # 2️⃣ KYC Verification → Verification Agent
-    # =====================================================
-    if re.search(r"\bkyc\b|\bverify\b|\bphone\b|\baddress\b", text, re.IGNORECASE):
-        kyc = verification.verify_kyc(customer)
-
-        if kyc["verified"]:
-            session["stage"] = "KYC_DONE"
-            return {
-                "replies": [
-                    {"role": "verification", "text": "✅ KYC verified successfully."}
-                ]
-            }
-        else:
-            return {
-                "replies": [
-                    {"role": "verification", "text": "❌ KYC mismatch detected."}
-                ]
-            }
-
-    # =====================================================
-    # 3️⃣ Document Collection (Salary Slip)
-    # =====================================================
-    if re.search(r"salary|salary slip|upload", text, re.IGNORECASE):
-        session["stage"] = "DOC_PENDING"
+    # ---------------- TC-03: User not interested ----------------
+    if re.search(r"\b(no|not interested|don’t want|dont want)\b", text, re.IGNORECASE):
+        session["stage"] = "CLOSED"
         return {
             "replies": [
                 {
                     "role": "master",
                     "text": (
-                        "Please upload your salary slip using the upload button, "
-                        "then type 'Attached'."
+                        "No problem 👍 Thanks for your time. "
+                        "If you ever need a personal loan in the future, "
+                        "I’ll be happy to help. Have a great day!"
+                    )
+                }
+            ]
+        }
+
+    # ---------------- TC-04: Generic query ----------------
+    if re.search(r"\b(what loans|what do you offer|loan options)\b", text, re.IGNORECASE):
+        return {
+            "replies": [
+                {
+                    "role": "sales",
+                    "text": (
+                        "We offer instant personal loans with minimal documentation, "
+                        "competitive interest rates, and flexible tenures. "
+                        "Tell me the amount and tenure you’re considering, and I’ll help you further."
                     )
                 }
             ]
         }
 
     # =====================================================
-    # 4️⃣ Loan Parsing + Underwriting Decision
+    # 🔐 PHONE-BASED KYC
+    # =====================================================
+    if session["stage"] == "INIT":
+        session["stage"] = "KYC_PENDING"
+        return {
+            "replies": [
+                {
+                    "role": "master",
+                    "text": (
+                        f"Hi {customer['name']} 👋\n\n"
+                        "For security reasons, please confirm your "
+                        "**registered phone number** to continue."
+                    )
+                }
+            ]
+        }
+
+    if session["stage"] == "KYC_PENDING":
+        user_phone = re.sub(r"\D", "", text)
+        actual_phone = re.sub(r"\D", "", customer.get("phone", ""))
+
+        if user_phone == actual_phone and user_phone:
+            session["stage"] = "KYC_VERIFIED"
+            return {
+                "replies": [
+                    {
+                        "role": "verification",
+                        "text": "✅ Phone number verified successfully."
+                    }
+                ]
+            }
+        return {
+            "replies": [
+                {
+                    "role": "master",
+                    "text": "❌ Phone number does not match our records. Please try again."
+                }
+            ]
+        }
+
+    # ---------------- Block flow until KYC ----------------
+    if session["stage"] not in ["KYC_VERIFIED", "UNDERWRITING", "CONSENT_PENDING"]:
+        return {
+            "replies": [
+                {
+                    "role": "master",
+                    "text": "Please complete phone verification before proceeding."
+                }
+            ]
+        }
+
+    # =====================================================
+    # ✋ CONSENT HANDLING
+    # =====================================================
+    if session["stage"] == "CONSENT_PENDING":
+        if text.lower() in ["yes", "y", "confirm", "proceed"]:
+            data = session.pop("pending_approval")
+
+            sanction_path = sanction_worker.generate_sanction(
+                customer=customer,
+                amount=data["amount"],
+                tenure_months=data["tenure"],
+                rate=data["rate"],
+                emi=data["emi"],
+                out_dir=SANCTION_DIR
+            )
+
+            session["stage"] = "APPROVED"
+
+            return {
+                "replies": [
+                    {
+                        "role": "sanction",
+                        "text": "📄 Sanction letter generated successfully.",
+                        "meta": {"link": f"/api/sanction/{sanction_path.name}"}
+                    }
+                ],
+                "sanctionUrl": f"/api/sanction/{sanction_path.name}"
+            }
+
+        session["stage"] = "CLOSED"
+        return {
+            "replies": [
+                {
+                    "role": "master",
+                    "text": "Alright 👍 I won’t proceed further. Feel free to reach out anytime."
+                }
+            ]
+        }
+
+    # =====================================================
+    # 🧠 INTENT + UNDERWRITING
     # =====================================================
     amount, tenure_months = parse_amount_and_tenure(text)
+
+    # ---------------- TC-08: Invalid amount ----------------
+    if amount is not None and amount <= 0:
+        return {
+            "replies": [
+                {
+                    "role": "master",
+                    "text": "Please enter a valid loan amount greater than zero."
+                }
+            ]
+        }
 
     if amount and tenure_months:
         session["stage"] = "UNDERWRITING"
 
-        # Credit score fetched from Credit Bureau
-        credit = credit_service.get_credit_score(cid)
-        credit_score = credit.get("credit_score", 0)
-
-        # Optional uploaded document
+        credit_score = credit_service.get_credit_score(cid).get("credit_score", 0)
         file_path = UPLOAD_MAP.get(req.fileId) if req.fileId else None
 
         decision = underwriting.evaluate_loan(
@@ -222,100 +223,65 @@ def master_chat(req: ChatRequest):
             file_path=file_path
         )
 
-        # -------- Decision Outcomes --------
         if decision["status"] == "REJECT":
-            session["stage"] = "REJECTED"
-            return {
-                "replies": [
-                    {"role": "underwriting", "text": decision["reason"]}
-                ]
-            }
+            session["stage"] = "CLOSED"
+            return {"replies": [{"role": "underwriting", "text": decision["reason"]}]}
 
         if decision["status"] == "REQ_DOC":
-            session["stage"] = "DOC_PENDING"
             return {
                 "replies": [
-                    {"role": "underwriting", "text": decision["reason"]}
+                    {
+                        "role": "master",
+                        "text": "Please upload your salary slip to continue the process."
+                    }
                 ]
             }
 
         if decision["status"] == "APPROVE":
-            session["stage"] = "APPROVED"
-
-            sanction_path = sanction_worker.generate_sanction(
-                customer=customer,
-                amount=decision["approved_amount"],
-                tenure_months=tenure_months,
-                rate=decision["rate"],
-                emi=decision["emi"],
-                out_dir=SANCTION_DIR
-            )
-
-            filename = sanction_path.name
+            session["stage"] = "CONSENT_PENDING"
+            session["pending_approval"] = {
+                "amount": decision["approved_amount"],
+                "tenure": tenure_months,
+                "rate": decision["rate"],
+                "emi": decision["emi"]
+            }
 
             return {
                 "replies": [
                     {
-                        "role": "underwriting",
+                        "role": "master",
                         "text": (
-                            f"✅ Loan approved for "
-                            f"{format_inr(decision['approved_amount'])} "
-                            f"at {decision['rate']}% p.a.\n"
+                            "Your loan is eligible for approval ✅\n\n"
+                            f"Amount: {format_inr(decision['approved_amount'])}\n"
                             f"Tenure: {tenure_months} months\n"
-                            f"EMI: {format_inr(decision['emi'])}"
+                            f"EMI: {format_inr(decision['emi'])}\n\n"
+                            "Do you want to proceed with this loan? (Yes / No)"
                         )
-                    },
-                    {
-                        "role": "sanction",
-                        "text": "📄 Sanction letter generated successfully.",
-                        "meta": {"link": f"/api/sanction/{filename}"}
                     }
-                ],
-                "sanctionUrl": f"/api/sanction/{filename}"
+                ]
             }
 
     # =====================================================
-    # 5️⃣ Fallback / Guidance
+    # Fallback
     # =====================================================
     return {
         "replies": [
             {
                 "role": "master",
-                "text": (
-                    f"Hi {customer['name']}, I can help you get an instant "
-                    f"personal loan. Please tell me the amount and tenure."
-                )
+                "text": "Please tell me the loan amount and tenure you’re looking for."
             }
         ]
     }
 
 
-# =========================================================
-# 🔧 Helper Functions
-# =========================================================
+# -------------------- Helpers --------------------
 def parse_amount_and_tenure(text: str):
-    """
-    Extracts loan amount and tenure (months) from free-text input.
+    amount_match = re.search(r"(?:₹\s*)?(\d{1,3}(?:,\d{3})+|\d+)", text)
+    tenure_match = re.search(r"(\d{1,2})\s*(months?|yrs?|years?)", text, re.IGNORECASE)
 
-    Examples:
-    - ₹150000 for 24 months
-    - 2 years loan of 3,00,000
-    """
-    amount_match = re.search(
-        r"(?:₹\s*)?(\d{1,3}(?:,\d{3})+|\d+)", text
-    )
-    tenure_match = re.search(
-        r"(\d{1,2})\s*(months?|yrs?|years?)",
-        text,
-        re.IGNORECASE
-    )
-
-    amount = (
-        int(amount_match.group(1).replace(",", ""))
-        if amount_match else None
-    )
-
+    amount = int(amount_match.group(1).replace(",", "")) if amount_match else None
     tenure = None
+
     if tenure_match:
         t = int(tenure_match.group(1))
         tenure = t * 12 if "year" in tenure_match.group(2).lower() else t
@@ -324,14 +290,8 @@ def parse_amount_and_tenure(text: str):
 
 
 def format_inr(x):
-    """
-    Formats numeric values into Indian Rupee format.
-    """
     try:
         val = x if isinstance(x, Decimal) else Decimal(str(x))
         return f"₹{val.quantize(Decimal('0.01')):,.2f}"
     except Exception:
-        try:
-            return f"₹{int(x):,}"
-        except Exception:
-            return f"₹{x}"
+        return f"₹{x}"

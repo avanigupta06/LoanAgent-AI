@@ -10,6 +10,14 @@ Built using a **Master Agent + Worker Agents architecture**, LoanAgent AI handle
 
 ---
 
+### Workflow
+
+```bash
+    Greeting --> KYC_Verification --> Loan_Discussion --> Customer_Consent --> Sanction_Letter_Generation
+```
+
+---
+
 ## 🚀 **Key Features**
 
 ### **1. Agentic Orchestration**
@@ -107,6 +115,7 @@ npm start
 
 ## 📸 Screenshots
 ![1](screenshots/1.png)
+![2](screenshots/2.png)
 
 ---
 
